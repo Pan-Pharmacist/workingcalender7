@@ -1,0 +1,1448 @@
+ <!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบลงตารางเวรเภสัชกร - Professional</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            box-sizing: border-box;
+        }
+        .tab-active {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        .tab-inactive {
+            background-color: #f8fafc;
+            color: #64748b;
+        }
+        .tab-inactive:hover {
+            background-color: #e2e8f0;
+            color: #475569;
+        }
+        .card-shadow {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .status-connected {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        .status-disconnected {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        .status-error {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .5;
+            }
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            max-width: 400px;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
+        }
+        .notification.show {
+            transform: translateX(0);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 min-h-screen">
+    <!-- Notification Container -->
+    <div id="notification" class="notification"></div>
+
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="gradient-bg rounded-2xl p-8 text-white card-shadow mb-6">
+                <h1 class="text-4xl font-bold mb-3">🏥 ระบบลงตารางเวรเภสัชกร</h1>
+                <p class="text-blue-100 text-lg">ระบบจัดการตารางเวรแบบครบวงจร เชื่อมต่อ Google Sheets</p>
+                <div class="mt-4 flex justify-center items-center space-x-4">
+                    <div id="connectionStatus" class="px-4 py-2 rounded-full text-sm font-medium status-disconnected">
+                        <span class="loading-spinner inline-block mr-2"></span>
+                        กำลังเชื่อมต่อ Google Sheets...
+                    </div>
+                    <div id="lastSync" class="text-blue-200 text-sm">
+                        ซิงค์ล่าสุด: ไม่เคย
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex flex-wrap mb-8 bg-white rounded-xl shadow-lg p-2">
+            <button id="scheduleTab" class="flex-1 min-w-0 py-4 px-6 rounded-lg font-medium transition-all duration-300 tab-active">
+                <span class="block">📅</span>
+                <span class="text-sm mt-1">ลงตารางเวร</span>
+            </button>
+            <button id="pharmacistTab" class="flex-1 min-w-0 py-4 px-6 rounded-lg font-medium transition-all duration-300 tab-inactive">
+                <span class="block">👨‍⚕️</span>
+                <span class="text-sm mt-1">จัดการเภสัชกร</span>
+            </button>
+            <button id="shiftManagementTab" class="flex-1 min-w-0 py-4 px-6 rounded-lg font-medium transition-all duration-300 tab-inactive">
+                <span class="block">⚙️</span>
+                <span class="text-sm mt-1">จัดการเวร</span>
+            </button>
+            <button id="reportTab" class="flex-1 min-w-0 py-4 px-6 rounded-lg font-medium transition-all duration-300 tab-inactive">
+                <span class="block">📊</span>
+                <span class="text-sm mt-1">รายงาน</span>
+            </button>
+        </div>
+
+        <!-- Schedule Form -->
+        <div id="scheduleForm" class="fade-in">
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Form Section -->
+                <div class="bg-white rounded-xl card-shadow p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                        <span class="bg-blue-100 p-2 rounded-lg mr-3">📝</span>
+                        บันทึกตารางเวร
+                    </h2>
+                    
+                    <form id="shiftForm" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">ชื่อ-นามสกุลเภสัชกร</label>
+                            <select id="pharmacistSelect" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" required>
+                                <option value="">กำลังโหลดรายชื่อเภสัชกร...</option>
+                            </select>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">วันที่ขึ้นเวร</label>
+                                <input type="date" id="shiftDate" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">เวลา</label>
+                                <input type="time" id="shiftTime" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" required>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">ชื่อเวรที่อยู่</label>
+                            <select id="shiftName" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200" required>
+                                <option value="">กำลังโหลดรายการเวร...</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">หมายเหตุ (ไม่บังคับ)</label>
+                            <textarea id="shiftNote" rows="3" placeholder="เช่น เวรพิเศษ, เปลี่ยนเวรกับคนอื่น..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"></textarea>
+                        </div>
+
+                        <button type="submit" id="submitBtn" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg">
+                            <span id="submitText">💾 บันทึกตารางเวร</span>
+                            <span id="submitLoading" class="hidden">
+                                <span class="loading-spinner inline-block mr-2"></span>
+                                กำลังบันทึก...
+                            </span>
+                        </button>
+                    </form>
+
+                    <div id="scheduleMessage" class="mt-6 p-4 rounded-xl hidden"></div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="space-y-6">
+                    <div class="bg-white rounded-xl card-shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">📈 สถิติวันนี้</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center p-4 bg-blue-50 rounded-lg">
+                                <div class="text-2xl font-bold text-blue-600" id="todayShifts">0</div>
+                                <div class="text-sm text-gray-600">เวรวันนี้</div>
+                            </div>
+                            <div class="text-center p-4 bg-green-50 rounded-lg">
+                                <div class="text-2xl font-bold text-green-600" id="totalPharmacists">0</div>
+                                <div class="text-sm text-gray-600">เภสัชกรทั้งหมด</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl card-shadow p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">🕐 เวรปัจจุบัน</h3>
+                        <div id="currentShifts" class="space-y-3">
+                            <div class="text-center text-gray-500 py-8">
+                                กำลังโหลดข้อมูล...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pharmacist Management -->
+        <div id="pharmacistForm" class="hidden fade-in">
+            <div class="grid lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-xl card-shadow p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                        <span class="bg-green-100 p-2 rounded-lg mr-3">👨‍⚕️</span>
+                        เพิ่มเภสัชกรใหม่
+                    </h2>
+                    
+                    <form id="addPharmacistForm" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">ชื่อ-นามสกุล</label>
+                            <input type="text" id="pharmacistName" placeholder="เช่น ดร.สมศักดิ์ ใจดี" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">เลขใบประกอบวิชาชีพ</label>
+                            <input type="text" id="pharmacistLicense" placeholder="เช่น PH12345" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">แผนก/หน่วยงาน</label>
+                            <select id="pharmacistDepartment" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200" required>
+                                <option value="">เลือกแผนก...</option>
+                                <option value="ผู้ป่วยใน">ผู้ป่วยใน</option>
+                                <option value="ผู้ป่วยนอก">ผู้ป่วยนอก</option>
+                                <option value="ห้องฉุกเฉิน">ห้องฉุกเฉิน</option>
+                                <option value="ICU">ICU</option>
+                                <option value="คลินิกพิเศษ">คลินิกพิเศษ</option>
+                                <option value="หน่วยผลิตยา">หน่วยผลิตยา</option>
+                                <option value="ควบคุมยาพิเศษ">ควบคุมยาพิเศษ</option>
+                                <option value="คลินิกปรึกษาการใช้ยา">คลินิกปรึกษาการใช้ยา</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">เบอร์โทรศัพท์</label>
+                            <input type="tel" id="pharmacistPhone" placeholder="เช่น 0812345678" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200">
+                        </div>
+
+                        <button type="submit" class="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg">
+                            ➕ เพิ่มเภสัชกร
+                        </button>
+                    </form>
+
+                    <div id="pharmacistMessage" class="mt-6 p-4 rounded-xl hidden"></div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-semibold text-gray-800">📋 รายชื่อเภสัชกรทั้งหมด</h3>
+                        <button id="refreshPharmacistsBtn" class="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors">
+                            🔄 รีเฟรช
+                        </button>
+                    </div>
+                    <div id="pharmacistList" class="space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-8">
+                            กำลังโหลดรายชื่อ...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shift Management -->
+        <div id="shiftManagementForm" class="hidden fade-in">
+            <div class="grid lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-xl card-shadow p-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                        <span class="bg-purple-100 p-2 rounded-lg mr-3">⚙️</span>
+                        เพิ่มเวรใหม่
+                    </h2>
+                    
+                    <form id="addShiftTypeForm" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">ชื่อเวร</label>
+                            <input type="text" id="shiftTypeName" placeholder="เช่น เวรเช้า, เวรดึก" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200" required>
+                        </div>
+
+                        <div class="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">เวลาเริ่ม</label>
+                                <input type="time" id="shiftStartTime" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-3">เวลาสิ้นสุด</label>
+                                <input type="time" id="shiftEndTime" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200" required>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">คำอธิบาย</label>
+                            <textarea id="shiftDescription" rows="3" placeholder="รายละเอียดของเวร..." class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 resize-none"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">สีประจำเวร</label>
+                            <select id="shiftColor" class="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200">
+                                <option value="#3b82f6">🔵 น้ำเงิน</option>
+                                <option value="#10b981">🟢 เขียว</option>
+                                <option value="#f59e0b">🟡 เหลือง</option>
+                                <option value="#ef4444">🔴 แดง</option>
+                                <option value="#8b5cf6">🟣 ม่วง</option>
+                                <option value="#06b6d4">🔷 ฟ้าอ่อน</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg">
+                            ➕ เพิ่มเวรใหม่
+                        </button>
+                    </form>
+
+                    <div id="shiftManagementMessage" class="mt-6 p-4 rounded-xl hidden"></div>
+                </div>
+
+                <div class="bg-white rounded-xl card-shadow p-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-semibold text-gray-800">📋 รายการเวรทั้งหมด</h3>
+                        <button id="refreshShiftTypesBtn" class="px-4 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors">
+                            🔄 รีเฟรช
+                        </button>
+                    </div>
+                    <div id="shiftTypeList" class="space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-8">
+                            กำลังโหลดรายการเวร...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report Section -->
+        <div id="reportForm" class="hidden fade-in">
+            <div class="bg-white rounded-xl card-shadow p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center">
+                    <span class="bg-orange-100 p-2 rounded-lg mr-3">📊</span>
+                    รายงานตารางเวร
+                </h2>
+
+                <div class="grid md:grid-cols-4 gap-4 mb-8">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">วันที่เริ่มต้น</label>
+                        <input type="date" id="reportStartDate" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">วันที่สิ้นสุด</label>
+                        <input type="date" id="reportEndDate" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">เภสัชกร</label>
+                        <select id="reportPharmacist" class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                            <option value="">ทั้งหมด</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button id="generateReportBtn" class="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200">
+                            📈 สร้างรายงาน
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-4 mb-6">
+                    <button id="exportExcelBtn" class="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200">
+                        📊 Export Excel
+                    </button>
+                    <button id="printReportBtn" class="w-full bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200">
+                        🖨️ พิมพ์รายงาน
+                    </button>
+                </div>
+
+                <div id="reportResults" class="space-y-6">
+                    <div class="text-center text-gray-500 py-12">
+                        เลือกช่วงวันที่และกดสร้างรายงานเพื่อดูข้อมูล
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let pharmacists = [];
+        let shiftTypes = [];
+        let schedules = [];
+        let isConnected = false;
+
+        // Google Sheets configuration
+        const SHEET_ID = '1h61xNo2LkAlVLKzexy6CMFJ45gp6MlA3lkrcjRfSLzg';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_x6rgD4e7W_j16o_RtPGrT2wJQJGMcBVT4MRmQFrhClcCnZvlx4XDJzeFVPE17vBJzg/exec'; 
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Initializing Pharmacy Scheduler...');
+            initializeTabs();
+            setDefaultDates();
+            loadInitialData();
+            setupEventListeners();
+            initializeAutoRefresh();
+        });
+
+        // Tab management
+        function initializeTabs() {
+            const tabs = ['schedule', 'pharmacist', 'shiftManagement', 'report'];
+            
+            tabs.forEach(tab => {
+                document.getElementById(`${tab}Tab`).addEventListener('click', () => switchTab(tab));
+            });
+        }
+
+        function switchTab(activeTab) {
+            const tabs = ['schedule', 'pharmacist', 'shiftManagement', 'report'];
+            
+            tabs.forEach(tab => {
+                const tabBtn = document.getElementById(`${tab}Tab`);
+                const form = document.getElementById(`${tab}Form`);
+                
+                if (tab === activeTab) {
+                    tabBtn.className = 'flex-1 min-w-0 py-4 px-6 rounded-lg font-medium transition-all duration-300 tab-active';
+                    form.classList.remove('hidden');
+                    form.classList.add('fade-in');
+                } else {
+                    tabBtn.className = 'flex-1 min-w-0 py-4 px-6 rounded-lg font-medium transition-all duration-300 tab-inactive';
+                    form.classList.add('hidden');
+                }
+            });
+
+            // Load tab-specific data
+            if (activeTab === 'report') {
+                updateReportPharmacistSelect();
+            }
+        }
+
+        // Set default dates
+        function setDefaultDates() {
+            const now = new Date();
+            const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+            const todayStr = localDate.toISOString().split('T')[0];
+            const weekAgo = new Date(localDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            
+            document.getElementById('shiftDate').value = todayStr;
+            document.getElementById('shiftTime').value = now.toTimeString().slice(0, 5);
+            document.getElementById('reportStartDate').value = weekAgo;
+            document.getElementById('reportEndDate').value = todayStr;
+        }
+
+        // Auto refresh functionality
+        function initializeAutoRefresh() {
+            setInterval(() => {
+                if (isConnected) {
+                    loadRecentSchedules(true); // Silent refresh
+                }
+            }, 30000); // Refresh every 30 seconds
+        }
+
+        // Load initial data
+        async function loadInitialData() {
+            updateConnectionStatus('connecting');
+            showNotification('กำลังโหลดข้อมูลเริ่มต้น...', 'info');
+            
+            try {
+                await Promise.all([
+                    loadPharmacists(),
+                    loadShiftTypes(),
+                    loadRecentSchedules()
+                ]);
+                
+                updateConnectionStatus('connected');
+                updateLastSync();
+                showNotification('เชื่อมต่อและโหลดข้อมูลสำเร็จ!', 'success');
+            } catch (error) {
+                console.error('Error loading data:', error);
+                updateConnectionStatus('error');
+                loadDefaultData();
+                showNotification('ไม่สามารถเชื่อมต่อได้ ใช้ข้อมูลจำลอง', 'warning');
+            }
+        }
+
+        // Google Sheets API functions
+        async function callGoogleSheets(action, data = {}) {
+            if (!SCRIPT_URL || SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbyvyHI56A9wpibV0gVxx7I9sYB84oHkFwo-gNFBHiQaUK9bQgp8ZCTr2HlOGE0hpvvD9g/exec') {
+                throw new Error('Google Apps Script URL not configured');
+            }
+
+            const payload = {
+                action: action,
+                sheetId: SHEET_ID,
+                timestamp: new Date().toISOString(),
+                ...data
+            };
+
+            const response = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+                mode: 'cors'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Unknown error occurred');
+            }
+
+            return result.data;
+        }
+
+        async function loadPharmacists() {
+            try {
+                const data = await callGoogleSheets('getPharmacists');
+                pharmacists = data || [];
+                
+                // Add default pharmacists if sheet is empty
+                if (pharmacists.length === 0) {
+                    const defaultPharmacists = [
+                        { name: 'ดร.สมชาย ใจดี', license: 'PH12345', department: 'ผู้ป่วยใน', phone: '0812345678', createdAt: new Date().toISOString() },
+                        { name: 'ดร.สุดา วิทยา', license: 'PH12346', department: 'ผู้ป่วยนอก', phone: '0812345679', createdAt: new Date().toISOString() },
+                        { name: 'ดร.นิรันดร์ สุขใส', license: 'PH12347', department: 'ห้องฉุกเฉิน', phone: '0812345680', createdAt: new Date().toISOString() },
+                        { name: 'ดร.วิมล รักษา', license: 'PH12348', department: 'ICU', phone: '0812345681', createdAt: new Date().toISOString() }
+                    ];
+                    
+                    for (const pharmacist of defaultPharmacists) {
+                        await callGoogleSheets('addPharmacist', pharmacist);
+                        pharmacists.push(pharmacist);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading pharmacists:', error);
+                // Use fallback data
+                pharmacists = [
+                    { name: 'ดร.สมชาย ใจดี', license: 'PH12345', department: 'ผู้ป่วยใน', phone: '0812345678' },
+                    { name: 'ดร.สุดา วิทยา', license: 'PH12346', department: 'ผู้ป่วยนอก', phone: '0812345679' }
+                ];
+            }
+            
+            updatePharmacistSelect();
+            updatePharmacistList();
+            updateStats();
+        }
+
+        async function loadShiftTypes() {
+            try {
+                const data = await callGoogleSheets('getShiftTypes');
+                shiftTypes = data || [];
+                
+                // Add default shift types if sheet is empty
+                if (shiftTypes.length === 0) {
+                    const defaultShifts = [
+                        { name: 'เวรเช้า', startTime: '08:00', endTime: '16:00', description: 'เวรประจำช่วงเช้า', color: '#3b82f6', createdAt: new Date().toISOString() },
+                        { name: 'เวรบ่าย', startTime: '16:00', endTime: '24:00', description: 'เวรประจำช่วงบ่าย', color: '#10b981', createdAt: new Date().toISOString() },
+                        { name: 'เวรดึก', startTime: '00:00', endTime: '08:00', description: 'เวรประจำช่วงดึก', color: '#f59e0b', createdAt: new Date().toISOString() },
+                        { name: 'เวรฉุกเฉิน', startTime: '00:00', endTime: '23:59', description: 'เวรฉุกเฉินตลอด 24 ชั่วโมง', color: '#ef4444', createdAt: new Date().toISOString() }
+                    ];
+                    
+                    for (const shift of defaultShifts) {
+                        await callGoogleSheets('addShiftType', shift);
+                        shiftTypes.push(shift);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading shift types:', error);
+                // Use fallback data
+                shiftTypes = [
+                    { name: 'เวรเช้า', startTime: '08:00', endTime: '16:00', description: 'เวรประจำช่วงเช้า', color: '#3b82f6' },
+                    { name: 'เวรบ่าย', startTime: '16:00', endTime: '24:00', description: 'เวรประจำช่วงบ่าย', color: '#10b981' }
+                ];
+            }
+            
+            updateShiftSelect();
+            updateShiftTypeList();
+        }
+
+        async function loadRecentSchedules(silent = false) {
+            try {
+                const data = await callGoogleSheets('getSchedules');
+                schedules = data || [];
+                
+                updateCurrentShifts();
+                updateStats();
+                
+                if (!silent) {
+                    updateLastSync();
+                }
+            } catch (error) {
+                console.error('Error loading schedules:', error);
+                if (!silent) {
+                    schedules = [];
+                }
+            }
+        }
+
+        function loadDefaultData() {
+            pharmacists = [
+                { name: 'ดร.สมชาย ใจดี', license: 'PH12345', department: 'ผู้ป่วยใน', phone: '0812345678' }
+            ];
+            shiftTypes = [
+                { name: 'เวรเช้า', startTime: '08:00', endTime: '16:00', description: 'เวรประจำช่วงเช้า', color: '#3b82f6' }
+            ];
+            
+            updatePharmacistSelect();
+            updateShiftSelect();
+            updatePharmacistList();
+            updateShiftTypeList();
+            updateStats();
+        }
+
+        // Update UI functions
+        function updateConnectionStatus(status) {
+            const statusEl = document.getElementById('connectionStatus');
+            
+            switch (status) {
+                case 'connecting':
+                    statusEl.className = 'px-4 py-2 rounded-full text-sm font-medium status-disconnected';
+                    statusEl.innerHTML = '<span class="loading-spinner inline-block mr-2"></span>กำลังเชื่อมต่อ Google Sheets...';
+                    break;
+                case 'connected':
+                    statusEl.className = 'px-4 py-2 rounded-full text-sm font-medium status-connected';
+                    statusEl.innerHTML = '✅ เชื่อมต่อ Google Sheets สำเร็จ';
+                    isConnected = true;
+                    break;
+                case 'error':
+                    statusEl.className = 'px-4 py-2 rounded-full text-sm font-medium status-error';
+                    statusEl.innerHTML = '❌ ไม่สามารถเชื่อมต่อได้ (โหมดออฟไลน์)';
+                    isConnected = false;
+                    break;
+            }
+        }
+
+        function updateLastSync() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('th-TH', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('lastSync').textContent = `ซิงค์ล่าสุด: ${timeStr}`;
+        }
+
+        function showNotification(message, type = 'info', duration = 4000) {
+            const notification = document.getElementById('notification');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+
+            notification.innerHTML = `
+                <div class="${colors[type]} text-white px-6 py-4 rounded-lg shadow-lg">
+                    <div class="flex items-center">
+                        <span class="mr-2">
+                            ${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}
+                        </span>
+                        <span>${message}</span>
+                    </div>
+                </div>
+            `;
+
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, duration);
+        }
+
+        function updatePharmacistSelect() {
+            const select = document.getElementById('pharmacistSelect');
+            const reportSelect = document.getElementById('reportPharmacist');
+            
+            select.innerHTML = '<option value="">เลือกเภสัชกร...</option>';
+            reportSelect.innerHTML = '<option value="">ทั้งหมด</option>';
+            
+            pharmacists.forEach(pharmacist => {
+                const option = document.createElement('option');
+                option.value = pharmacist.name;
+                option.textContent = `${pharmacist.name} (${pharmacist.department})`;
+                select.appendChild(option);
+
+                const reportOption = document.createElement('option');
+                reportOption.value = pharmacist.name;
+                reportOption.textContent = pharmacist.name;
+                reportSelect.appendChild(reportOption);
+            });
+        }
+
+        function updateReportPharmacistSelect() {
+            const reportSelect = document.getElementById('reportPharmacist');
+            reportSelect.innerHTML = '<option value="">ทั้งหมด</option>';
+            
+            pharmacists.forEach(pharmacist => {
+                const option = document.createElement('option');
+                option.value = pharmacist.name;
+                option.textContent = pharmacist.name;
+                reportSelect.appendChild(option);
+            });
+        }
+
+        function updateShiftSelect() {
+            const select = document.getElementById('shiftName');
+            select.innerHTML = '<option value="">เลือกเวร...</option>';
+            
+            shiftTypes.forEach(shift => {
+                const option = document.createElement('option');
+                option.value = shift.name;
+                option.textContent = `${shift.name} (${shift.startTime}-${shift.endTime})`;
+                select.appendChild(option);
+            });
+        }
+
+        function updatePharmacistList() {
+            const container = document.getElementById('pharmacistList');
+            
+            if (pharmacists.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-8">ยังไม่มีข้อมูลเภสัชกร</div>';
+                return;
+            }
+            
+            container.innerHTML = pharmacists.map((pharmacist, index) => `
+                <div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div class="flex-1">
+                        <p class="font-semibold text-gray-800">${pharmacist.name}</p>
+                        <p class="text-sm text-gray-600">ใบประกอบ: ${pharmacist.license} • ${pharmacist.department}</p>
+                        ${pharmacist.phone ? `<p class="text-xs text-gray-500">📞 ${pharmacist.phone}</p>` : ''}
+                        ${pharmacist.createdAt ? `<p class="text-xs text-gray-400">เพิ่มเมื่อ: ${new Date(pharmacist.createdAt).toLocaleDateString('th-TH')}</p>` : ''}
+                    </div>
+                    <button onclick="removePharmacist(${index})" class="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors ml-4" title="ลบเภสัชกร">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updateShiftTypeList() {
+            const container = document.getElementById('shiftTypeList');
+            
+            if (shiftTypes.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-8">ยังไม่มีข้อมูลเวร</div>';
+                return;
+            }
+            
+            container.innerHTML = shiftTypes.map((shift, index) => `
+                <div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div class="flex items-center flex-1">
+                        <div class="w-4 h-4 rounded-full mr-3" style="background-color: ${shift.color || '#3b82f6'}"></div>
+                        <div>
+                            <p class="font-semibold text-gray-800">${shift.name}</p>
+                            <p class="text-sm text-gray-600">${shift.startTime} - ${shift.endTime}</p>
+                            <p class="text-xs text-gray-500 mt-1">${shift.description}</p>
+                            ${shift.createdAt ? `<p class="text-xs text-gray-400">เพิ่มเมื่อ: ${new Date(shift.createdAt).toLocaleDateString('th-TH')}</p>` : ''}
+                        </div>
+                    </div>
+                    <button onclick="removeShiftType(${index})" class="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors ml-4" title="ลบเวร">
+                        🗑️
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updateCurrentShifts() {
+            const container = document.getElementById('currentShifts');
+            const today = new Date().toISOString().split('T')[0];
+            const todayShifts = schedules.filter(schedule => schedule.date === today);
+            
+            if (todayShifts.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-500 py-8">ยังไม่มีเวรวันนี้</div>';
+                return;
+            }
+            
+            container.innerHTML = todayShifts.map(schedule => {
+                const shift = shiftTypes.find(s => s.name === schedule.shift);
+                const color = shift ? shift.color : '#3b82f6';
+                
+                return `
+                    <div class="p-4 bg-blue-50 rounded-lg border-l-4" style="border-left-color: ${color};">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <p class="font-semibold text-gray-800">${schedule.pharmacist}</p>
+                                <p class="text-sm text-gray-600">${schedule.shift} • ${schedule.time}</p>
+                                ${schedule.note ? `<p class="text-xs text-gray-500 mt-1">${schedule.note}</p>` : ''}
+                                <p class="text-xs text-gray-400 mt-1">บันทึกเมื่อ: ${new Date(schedule.timestamp).toLocaleString('th-TH')}</p>
+                            </div>
+                            <div class="w-3 h-3 rounded-full ml-2" style="background-color: ${color}"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateStats() {
+            const today = new Date().toISOString().split('T')[0];
+            const todayShifts = schedules.filter(schedule => schedule.date === today);
+            
+            document.getElementById('todayShifts').textContent = todayShifts.length;
+            document.getElementById('totalPharmacists').textContent = pharmacists.length;
+        }
+
+        // Event listeners
+        function setupEventListeners() {
+            // Schedule form
+            document.getElementById('shiftForm').addEventListener('submit', handleScheduleSubmit);
+            
+            // Pharmacist form
+            document.getElementById('addPharmacistForm').addEventListener('submit', handlePharmacistSubmit);
+            
+            // Shift management form
+            document.getElementById('addShiftTypeForm').addEventListener('submit', handleShiftTypeSubmit);
+            
+            // Report generation
+            document.getElementById('generateReportBtn').addEventListener('click', generateReport);
+            
+            // Export functions
+            document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
+            document.getElementById('printReportBtn').addEventListener('click', printReport);
+            
+            // Refresh buttons
+            document.getElementById('refreshPharmacistsBtn').addEventListener('click', () => {
+                showNotification('กำลังรีเฟรชข้อมูลเภสัชกร...', 'info');
+                loadPharmacists();
+            });
+            
+            document.getElementById('refreshShiftTypesBtn').addEventListener('click', () => {
+                showNotification('กำลังรีเฟรชข้อมูลเวร...', 'info');
+                loadShiftTypes();
+            });
+        }
+
+        // Form handlers
+        async function handleScheduleSubmit(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const submitText = document.getElementById('submitText');
+            const submitLoading = document.getElementById('submitLoading');
+            const messageDiv = document.getElementById('scheduleMessage');
+            
+            const formData = {
+                pharmacist: document.getElementById('pharmacistSelect').value,
+                date: document.getElementById('shiftDate').value,
+                time: document.getElementById('shiftTime').value,
+                shift: document.getElementById('shiftName').value,
+                note: document.getElementById('shiftNote').value.trim(),
+                timestamp: new Date().toISOString(),
+                id: Date.now().toString()
+            };
+
+            if (!formData.pharmacist || !formData.date || !formData.shift) {
+                showMessage(messageDiv, 'กรุณากรอกข้อมูลให้ครบถ้วน', 'error');
+                return;
+            }
+
+            // Check for duplicate schedule
+            const existingSchedule = schedules.find(s => 
+                s.pharmacist === formData.pharmacist && 
+                s.date === formData.date && 
+                s.shift === formData.shift
+            );
+
+            if (existingSchedule) {
+                showMessage(messageDiv, 'มีการลงเวรนี้แล้วในวันที่เดียวกัน', 'error');
+                return;
+            }
+
+            // Show loading state
+            submitText.classList.add('hidden');
+            submitLoading.classList.remove('hidden');
+            submitBtn.disabled = true;
+
+            try {
+                if (isConnected) {
+                    await callGoogleSheets('addSchedule', formData);
+                }
+                
+                // Add to local data
+                schedules.unshift(formData);
+                
+                // Update UI
+                updateCurrentShifts();
+                updateStats();
+                
+                const pharmacist = pharmacists.find(p => p.name === formData.pharmacist);
+                const shift = shiftTypes.find(s => s.name === formData.shift);
+                
+                showMessage(messageDiv, `✅ บันทึกตารางเวรสำเร็จ!\n${formData.pharmacist} - ${formData.shift}\nวันที่: ${new Date(formData.date).toLocaleDateString('th-TH')}`, 'success');
+                showNotification(`เพิ่มเวรสำเร็จ: ${formData.pharmacist} - ${formData.shift}`, 'success');
+                
+                // Reset form
+                document.getElementById('shiftForm').reset();
+                setDefaultDates();
+                
+            } catch (error) {
+                console.error('Error saving schedule:', error);
+                showMessage(messageDiv, '❌ เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่', 'error');
+                showNotification('ไม่สามารถบันทึกได้ กรุณาลองใหม่', 'error');
+            } finally {
+                // Reset button state
+                submitText.classList.remove('hidden');
+                submitLoading.classList.add('hidden');
+                submitBtn.disabled = false;
+            }
+        }
+
+        async function handlePharmacistSubmit(e) {
+            e.preventDefault();
+            
+            const messageDiv = document.getElementById('pharmacistMessage');
+            const formData = {
+                name: document.getElementById('pharmacistName').value.trim(),
+                license: document.getElementById('pharmacistLicense').value.trim(),
+                department: document.getElementById('pharmacistDepartment').value,
+                phone: document.getElementById('pharmacistPhone').value.trim(),
+                createdAt: new Date().toISOString(),
+                id: Date.now().toString()
+            };
+
+            if (!formData.name || !formData.license || !formData.department) {
+                showMessage(messageDiv, 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน', 'error');
+                return;
+            }
+
+            // Check for duplicate
+            if (pharmacists.some(p => p.name === formData.name || p.license === formData.license)) {
+                showMessage(messageDiv, 'มีเภสัชกรหรือเลขใบประกอบนี้อยู่แล้ว', 'error');
+                return;
+            }
+
+            try {
+                if (isConnected) {
+                    await callGoogleSheets('addPharmacist', formData);
+                }
+                
+                pharmacists.push(formData);
+                updatePharmacistSelect();
+                updatePharmacistList();
+                updateStats();
+                
+                showMessage(messageDiv, `✅ เพิ่มเภสัชกร "${formData.name}" สำเร็จ!`, 'success');
+                showNotification(`เพิ่มเภสัชกรใหม่: ${formData.name}`, 'success');
+                document.getElementById('addPharmacistForm').reset();
+                
+            } catch (error) {
+                console.error('Error adding pharmacist:', error);
+                showMessage(messageDiv, '❌ เกิดข้อผิดพลาดในการเพิ่มเภสัชกร', 'error');
+                showNotification('ไม่สามารถเพิ่มเภสัชกรได้', 'error');
+            }
+        }
+
+        async function handleShiftTypeSubmit(e) {
+            e.preventDefault();
+            
+            const messageDiv = document.getElementById('shiftManagementMessage');
+            const formData = {
+                name: document.getElementById('shiftTypeName').value.trim(),
+                startTime: document.getElementById('shiftStartTime').value,
+                endTime: document.getElementById('shiftEndTime').value,
+                description: document.getElementById('shiftDescription').value.trim(),
+                color: document.getElementById('shiftColor').value,
+                createdAt: new Date().toISOString(),
+                id: Date.now().toString()
+            };
+
+            if (!formData.name || !formData.startTime || !formData.endTime) {
+                showMessage(messageDiv, 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน', 'error');
+                return;
+            }
+
+            // Check for duplicate
+            if (shiftTypes.some(s => s.name === formData.name)) {
+                showMessage(messageDiv, 'มีชื่อเวรนี้อยู่แล้ว', 'error');
+                return;
+            }
+
+            // Validate time format
+            if (formData.startTime >= formData.endTime && formData.endTime !== '23:59') {
+                showMessage(messageDiv, 'เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด', 'error');
+                return;
+            }
+
+            try {
+                if (isConnected) {
+                    await callGoogleSheets('addShiftType', formData);
+                }
+                
+                shiftTypes.push(formData);
+                updateShiftSelect();
+                updateShiftTypeList();
+                
+                showMessage(messageDiv, `✅ เพิ่มเวร "${formData.name}" สำเร็จ!`, 'success');
+                showNotification(`เพิ่มเวรใหม่: ${formData.name}`, 'success');
+                document.getElementById('addShiftTypeForm').reset();
+                
+            } catch (error) {
+                console.error('Error adding shift type:', error);
+                showMessage(messageDiv, '❌ เกิดข้อผิดพลาดในการเพิ่มเวร', 'error');
+                showNotification('ไม่สามารถเพิ่มเวรได้', 'error');
+            }
+        }
+
+        // Remove functions
+        async function removePharmacist(index) {
+            const pharmacist = pharmacists[index];
+            if (!confirm(`ต้องการลบเภสัชกร "${pharmacist.name}" หรือไม่?\n\nหมายเหตุ: การลบจะไม่ส่งผลต่อตารางเวรที่มีอยู่แล้ว`)) return;
+            
+            try {
+                if (isConnected && pharmacist.id) {
+                    await callGoogleSheets('removePharmacist', { id: pharmacist.id });
+                }
+                
+                pharmacists.splice(index, 1);
+                updatePharmacistSelect();
+                updatePharmacistList();
+                updateStats();
+                showNotification(`ลบเภสัชกร: ${pharmacist.name}`, 'success');
+            } catch (error) {
+                console.error('Error removing pharmacist:', error);
+                showNotification('ไม่สามารถลบเภสัชกรได้', 'error');
+            }
+        }
+
+        async function removeShiftType(index) {
+            const shift = shiftTypes[index];
+            if (!confirm(`ต้องการลบเวร "${shift.name}" หรือไม่?\n\nหมายเหตุ: การลบจะไม่ส่งผลต่อตารางเวรที่มีอยู่แล้ว`)) return;
+            
+            try {
+                if (isConnected && shift.id) {
+                    await callGoogleSheets('removeShiftType', { id: shift.id });
+                }
+                
+                shiftTypes.splice(index, 1);
+                updateShiftSelect();
+                updateShiftTypeList();
+                showNotification(`ลบเวร: ${shift.name}`, 'success');
+            } catch (error) {
+                console.error('Error removing shift type:', error);
+                showNotification('ไม่สามารถลบเวรได้', 'error');
+            }
+        }
+
+        // Report generation
+        async function generateReport() {
+            const startDate = document.getElementById('reportStartDate').value;
+            const endDate = document.getElementById('reportEndDate').value;
+            const selectedPharmacist = document.getElementById('reportPharmacist').value;
+            const container = document.getElementById('reportResults');
+            
+            if (!startDate || !endDate) {
+                container.innerHTML = '<div class="text-center text-red-500 py-8">กรุณาเลือกช่วงวันที่</div>';
+                return;
+            }
+            
+            if (new Date(startDate) > new Date(endDate)) {
+                container.innerHTML = '<div class="text-center text-red-500 py-8">วันที่เริ่มต้นต้องน้อยกว่าวันที่สิ้นสุด</div>';
+                return;
+            }
+            
+            container.innerHTML = '<div class="text-center py-8"><span class="loading-spinner inline-block mr-2"></span>กำลังสร้างรายงาน...</div>';
+            
+            try {
+                // Get fresh data if connected
+                if (isConnected) {
+                    await loadRecentSchedules(true);
+                }
+                
+                let filteredSchedules = schedules.filter(schedule => {
+                    const scheduleDate = schedule.date;
+                    const inDateRange = scheduleDate >= startDate && scheduleDate <= endDate;
+                    const matchesPharmacist = !selectedPharmacist || schedule.pharmacist === selectedPharmacist;
+                    return inDateRange && matchesPharmacist;
+                });
+                
+                if (filteredSchedules.length === 0) {
+                    container.innerHTML = '<div class="text-center text-gray-500 py-8">ไม่พบข้อมูลในช่วงวันที่ที่เลือก</div>';
+                    return;
+                }
+
+                // Sort schedules by date and time
+                filteredSchedules.sort((a, b) => {
+                    const dateCompare = new Date(a.date) - new Date(b.date);
+                    if (dateCompare !== 0) return dateCompare;
+                    return a.time.localeCompare(b.time);
+                });
+
+                // Generate statistics
+                const uniquePharmacists = new Set(filteredSchedules.map(s => s.pharmacist));
+                const uniqueShifts = new Set(filteredSchedules.map(s => s.shift));
+                const shiftCounts = {};
+                const pharmacistCounts = {};
+
+                filteredSchedules.forEach(schedule => {
+                    shiftCounts[schedule.shift] = (shiftCounts[schedule.shift] || 0) + 1;
+                    pharmacistCounts[schedule.pharmacist] = (pharmacistCounts[schedule.pharmacist] || 0) + 1;
+                });
+
+                // Generate report HTML
+                const reportHTML = `
+                    <div class="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">📊 สรุปรายงาน</h3>
+                            <div class="text-sm text-gray-600">
+                                ${new Date(startDate).toLocaleDateString('th-TH')} - ${new Date(endDate).toLocaleDateString('th-TH')}
+                            </div>
+                        </div>
+                        <div class="grid md:grid-cols-4 gap-4">
+                            <div class="text-center p-4 bg-white rounded-lg">
+                                <div class="text-2xl font-bold text-blue-600">${filteredSchedules.length}</div>
+                                <div class="text-sm text-gray-600">เวรทั้งหมด</div>
+                            </div>
+                            <div class="text-center p-4 bg-white rounded-lg">
+                                <div class="text-2xl font-bold text-green-600">${uniquePharmacists.size}</div>
+                                <div class="text-sm text-gray-600">เภสัชกรที่เข้าเวร</div>
+                            </div>
+                            <div class="text-center p-4 bg-white rounded-lg">
+                                <div class="text-2xl font-bold text-purple-600">${uniqueShifts.size}</div>
+                                <div class="text-sm text-gray-600">ประเภทเวร</div>
+                            </div>
+                            <div class="text-center p-4 bg-white rounded-lg">
+                                <div class="text-2xl font-bold text-orange-600">${Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1}</div>
+                                <div class="text-sm text-gray-600">จำนวนวัน</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white rounded-xl p-6">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-4">📈 สถิติตามประเภทเวร</h4>
+                            <div class="space-y-3">
+                                ${Object.entries(shiftCounts).map(([shift, count]) => {
+                                    const shiftType = shiftTypes.find(s => s.name === shift);
+                                    const color = shiftType ? shiftType.color : '#3b82f6';
+                                    const percentage = ((count / filteredSchedules.length) * 100).toFixed(1);
+                                    
+                                    return `
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center">
+                                                <div class="w-4 h-4 rounded-full mr-3" style="background-color: ${color}"></div>
+                                                <span class="text-gray-700">${shift}</span>
+                                            </div>
+                                            <div class="text-right">
+                                                <span class="font-semibold text-gray-800">${count}</span>
+                                                <span class="text-sm text-gray-500 ml-2">(${percentage}%)</span>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl p-6">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-4">👥 สถิติตามเภสัชกร</h4>
+                            <div class="space-y-3">
+                                ${Object.entries(pharmacistCounts)
+                                    .sort(([,a], [,b]) => b - a)
+                                    .slice(0, 10)
+                                    .map(([pharmacist, count]) => {
+                                        const percentage = ((count / filteredSchedules.length) * 100).toFixed(1);
+                                        
+                                        return `
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-gray-700">${pharmacist}</span>
+                                                <div class="text-right">
+                                                    <span class="font-semibold text-gray-800">${count}</span>
+                                                    <span class="text-sm text-gray-500 ml-2">(${percentage}%)</span>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl p-6" id="scheduleTable">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">📋 รายละเอียดตารางเวร</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="text-left p-3 font-semibold">วันที่</th>
+                                        <th class="text-left p-3 font-semibold">เภสัชกร</th>
+                                        <th class="text-left p-3 font-semibold">เวร</th>
+                                        <th class="text-left p-3 font-semibold">เวลา</th>
+                                        <th class="text-left p-3 font-semibold">หมายเหตุ</th>
+                                        <th class="text-left p-3 font-semibold">บันทึกเมื่อ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${filteredSchedules.map(schedule => {
+                                        const shift = shiftTypes.find(s => s.name === schedule.shift);
+                                        const color = shift ? shift.color : '#3b82f6';
+                                        
+                                        return `
+                                            <tr class="border-b hover:bg-gray-50">
+                                                <td class="p-3">${new Date(schedule.date).toLocaleDateString('th-TH')}</td>
+                                                <td class="p-3 font-medium">${schedule.pharmacist}</td>
+                                                <td class="p-3">
+                                                    <div class="flex items-center">
+                                                        <div class="w-3 h-3 rounded-full mr-2" style="background-color: ${color}"></div>
+                                                        ${schedule.shift}
+                                                    </div>
+                                                </td>
+                                                <td class="p-3">${schedule.time}</td>
+                                                <td class="p-3 text-gray-600">${schedule.note || '-'}</td>
+                                                <td class="p-3 text-xs text-gray-500">${new Date(schedule.timestamp).toLocaleString('th-TH')}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                
+                container.innerHTML = reportHTML;
+                
+            } catch (error) {
+                console.error('Error generating report:', error);
+                container.innerHTML = '<div class="text-center text-red-500 py-8">❌ เกิดข้อผิดพลาดในการสร้างรายงาน</div>';
+            }
+        }
+
+        // Export functions
+        function exportToExcel() {
+            const startDate = document.getElementById('reportStartDate').value;
+            const endDate = document.getElementById('reportEndDate').value;
+            const selectedPharmacist = document.getElementById('reportPharmacist').value;
+            
+            if (!startDate || !endDate) {
+                showNotification('กรุณาสร้างรายงานก่อน', 'warning');
+                return;
+            }
+
+            let filteredSchedules = schedules.filter(schedule => {
+                const scheduleDate = schedule.date;
+                const inDateRange = scheduleDate >= startDate && scheduleDate <= endDate;
+                const matchesPharmacist = !selectedPharmacist || schedule.pharmacist === selectedPharmacist;
+                return inDateRange && matchesPharmacist;
+            });
+
+            if (filteredSchedules.length === 0) {
+                showNotification('ไม่มีข้อมูลสำหรับ Export', 'warning');
+                return;
+            }
+
+            // Sort by date and time
+            filteredSchedules.sort((a, b) => {
+                const dateCompare = new Date(a.date) - new Date(b.date);
+                if (dateCompare !== 0) return dateCompare;
+                return a.time.localeCompare(b.time);
+            });
+
+            // Create CSV content
+            const headers = ['วันที่', 'เภสัชกร', 'เวร', 'เวลา', 'หมายเหตุ', 'บันทึกเมื่อ'];
+            const csvContent = [
+                headers.join(','),
+                ...filteredSchedules.map(schedule => [
+                    `"${new Date(schedule.date).toLocaleDateString('th-TH')}"`,
+                    `"${schedule.pharmacist}"`,
+                    `"${schedule.shift}"`,
+                    `"${schedule.time}"`,
+                    `"${schedule.note || ''}"`,
+                    `"${new Date(schedule.timestamp).toLocaleString('th-TH')}"`
+                ].join(','))
+            ].join('\n');
+
+            // Add BOM for proper Thai character display
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `ตารางเวรเภสัชกร_${startDate}_${endDate}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showNotification('ดาวน์โหลดไฟล์ Excel สำเร็จ', 'success');
+        }
+
+        function printReport() {
+            const reportContent = document.getElementById('reportResults').innerHTML;
+            
+            if (!reportContent || reportContent.includes('เลือกช่วงวันที่')) {
+                showNotification('กรุณาสร้างรายงานก่อน', 'warning');
+                return;
+            }
+
+            const printWindow = window.open('', '_blank');
+            const startDate = document.getElementById('reportStartDate').value;
+            const endDate = document.getElementById('reportEndDate').value;
+            
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="th">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>รายงานตารางเวรเภสัชกร</title>
+                    <style>
+                        body { font-family: 'Sarabun', Arial, sans-serif; margin: 20px; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .header h1 { color: #333; margin-bottom: 10px; }
+                        .header p { color: #666; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f5f5f5; font-weight: bold; }
+                        .stats { display: flex; justify-content: space-around; margin: 20px 0; }
+                        .stat-box { text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+                        .stat-number { font-size: 24px; font-weight: bold; color: #0066cc; }
+                        @media print {
+                            .no-print { display: none; }
+                            body { margin: 0; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>รายงานตารางเวรเภสัชกร</h1>
+                        <p>ช่วงวันที่: ${new Date(startDate).toLocaleDateString('th-TH')} - ${new Date(endDate).toLocaleDateString('th-TH')}</p>
+                        <p>พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</p>
+                    </div>
+                    ${reportContent}
+                </body>
+                </html>
+            `);
+            
+            printWindow.document.close();
+            printWindow.focus();
+            
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+
+            showNotification('เปิดหน้าต่างพิมพ์แล้ว', 'success');
+        }
+
+        // Utility functions
+        function showMessage(element, message, type) {
+            element.className = `mt-6 p-4 rounded-xl ${type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`;
+            element.style.whiteSpace = 'pre-line';
+            element.textContent = message;
+            element.classList.remove('hidden');
+            
+            setTimeout(() => {
+                element.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Validation functions
+        function validatePhoneNumber(phone) {
+            const phoneRegex = /^[0-9]{10}$/;
+            return phoneRegex.test(phone.replace(/[-\s]/g, ''));
+        }
+
+        function validateLicense(license) {
+            return license && license.length >= 3;
+        }
+
+        // Data persistence functions
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('pharmacyScheduler_pharmacists', JSON.stringify(pharmacists));
+                localStorage.setItem('pharmacyScheduler_shiftTypes', JSON.stringify(shiftTypes));
+                localStorage.setItem('pharmacyScheduler_schedules', JSON.stringify(schedules));
+                localStorage.setItem('pharmacyScheduler_lastUpdate', new Date().toISOString());
+            } catch (error) {
+                console.warn('Could not save to localStorage:', error);
+            }
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                const savedPharmacists = localStorage.getItem('pharmacyScheduler_pharmacists');
+                const savedShiftTypes = localStorage.getItem('pharmacyScheduler_shiftTypes');
+                const savedSchedules = localStorage.getItem('pharmacyScheduler_schedules');
+                
+                if (savedPharmacists) pharmacists = JSON.parse(savedPharmacists);
+                if (savedShiftTypes) shiftTypes = JSON.parse(savedShiftTypes);
+                if (savedSchedules) schedules = JSON.parse(savedSchedules);
+                
+                return true;
+            } catch (error) {
+                console.warn('Could not load from localStorage:', error);
+                return false;
+            }
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl/Cmd + S to save current form
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                const activeTab = document.querySelector('.tab-active').id;
+                
+                if (activeTab === 'scheduleTab') {
+                    document.getElementById('shiftForm').dispatchEvent(new Event('submit'));
+                } else if (activeTab === 'pharmacistTab') {
+                    document.getElementById('addPharmacistForm').dispatchEvent(new Event('submit'));
+                } else if (activeTab === 'shiftManagementTab') {
+                    document.getElementById('addShiftTypeForm').dispatchEvent(new Event('submit'));
+                } else if (activeTab === 'reportTab') {
+                    generateReport();
+                }
+            }
+            
+            // Ctrl/Cmd + R to refresh data
+            if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+                e.preventDefault();
+                loadInitialData();
+            }
+        });
+
+        // Error handling
+        window.addEventListener('error', function(e) {
+            console.error('Global error:', e.error);
+            showNotification('เกิดข้อผิดพลาด: ' + e.message, 'error');
+        });
+
+        // Unload handler
+        window.addEventListener('beforeunload', function(e) {
+            if (!isConnected) {
+                saveToLocalStorage();
+            }
+        });
+
+        // Service Worker registration for offline support
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => console.log('SW registered:', registration))
+                .catch(error => console.log('SW registration failed:', error));
+        }
+
+        console.log('🎉 Pharmacy Scheduler initialized successfully!');
+    </script>
+</body>
+</html>
